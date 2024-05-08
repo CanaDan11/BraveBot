@@ -178,20 +178,25 @@ class General(commands.Cog):
         """
         # Fetch player's name
         player_info_url = f"https://www.rslashfakebaseball.com/api/players/id/{player_id}"
-        player_info = requests.get(player_info_url).json()
-        player_name = player_info.get('playerName', f"Player {player_id}")
-        print(test1)
-        # Fetch data
+        player_info = requests.get(player_info_url)
+        player_data = player_info.json()
+        player_name = player_data.get('playerName', f"Player {player_id}")
+
         data = requests.get(f"{API_BASE_URL}/{league}/{player_id}").json()
+
         if not data:
             await ctx.send("No data available for the player in the specified league.")
             return
-        print(test2)
+        
         # Filter data based on pitch number range
-        filtered_data = [p for p in data if lower_pitch <= p['pitch'] <= higher_pitch]
-        seasons_sessions = [f"{p['season']}.{p['session']}.{p['inning']}.{p['playNumber']}" for p in filtered_data]
+        filtered_data = []
+        for item in data:
+            if lower_range <= item['pitch'] <= high_range:
+                filtered_data.append(item)
+
+        seasons_sessions = [f"{p['season']}.{p['session']}" for p in filtered_data]
+        innings = [f"{p['inning']}" for p in filtered_data]
         pitches = [p['pitch'] for p in filtered_data]
-        print(test3)
         if pitches:
             # Determine the number of pitches to display
             num_pitches = len(pitches)
@@ -200,7 +205,20 @@ class General(commands.Cog):
             fig_height = 6.0
             fig_width = num_pitches * 0.6
             plt.figure(figsize=(fig_width, fig_height), tight_layout=True)
-            plt.xticks(rotation=45, ha='right')
+
+            # Plot the filtered pitches as blue dots
+            plt.scatter(range(len(pitches)), pitches, marker='o', color='blue')
+
+            # Plot the line connecting the pitches as a solid blue line
+            for i in range(len(pitches) - 1):
+                plt.plot([i, i+1], [pitches[i], pitches[i+1]], color='blue')
+
+            # Combine seasons_sessions and innings labels
+            x_labels = [f"{season}\n{inning}" for season, inning in zip(seasons_sessions, innings)]
+
+            # Set the x-axis labels and their positions
+            plt.xticks(range(len(x_labels)), x_labels)
+
             plt.yticks(np.arange(0, 1001, 100), labels=[str(i) if i % 200 == 0 else '' for i in range(0, 1001, 100)])
             plt.ylim(0, 1000)
             plt.xlabel('Game')
@@ -208,14 +226,6 @@ class General(commands.Cog):
             plt.title(f'Pitches thrown by {player_name} in {league} (Range: {lower_range}-{high_range})')
             plt.grid(True)
 
-            # Plot the filtered pitches as blue dots
-            seasons_sessions = [f"{p['season']}.{p['session']}.{p['inning']}.{p['playNumber']}" for p in data]
-            plt.scatter(seasons_sessions, pitches, marker='o', color='blue')
-
-            # Plot the line connecting the pitches as a solid blue line
-            for i in range(len(seasons_sessions) - 1):
-                plt.plot([seasons_sessions[i], seasons_sessions[i+1]], [pitches[i], pitches[i+1]], color='blue')
-            
             # Save the plot
             filename = f'{self.image_folder}/plot_{self.image_counter}.png'
             plt.savefig(filename, format='png')
