@@ -187,34 +187,66 @@ class General(commands.Cog):
         if not data:
             await ctx.send("No data available for the player in the specified league.")
             return
-        
+    
         # Filter data based on pitch number range
         filtered_data = []
         for item in data:
             if lower_range <= item['pitch'] <= high_range:
                 filtered_data.append(item)
+        
+        # Extract playNumbers from filtered data
+        play_numbers = [p['playNumber'] for p in filtered_data]
+        
+        # Extract pitches from filtered data
+        pitches = [p['pitch'] for p in filtered_data]
+
+        # Filter data for immediate pitches before and after each pitch in the specified range
+        before_pitches = []
+        after_pitches = []
+        for play_number in play_numbers:
+            before_pitch = next((p['pitch'] for p in data if p['playNumber'] == play_number - 1), None)
+            after_pitch = next((p['pitch'] for p in data if p['playNumber'] == play_number + 1), None)
+            if before_pitch is not None:
+                before_pitches.append(before_pitch)
+            if after_pitch is not None:
+                after_pitches.append(after_pitch)
 
         seasons_sessions = [f"{p['season']}.{p['session']}" for p in filtered_data]
         innings = [f"{p['inning']}" for p in filtered_data]
-        pitches = [p['pitch'] for p in filtered_data]
+
         if pitches:
-            # Determine the number of pitches to display
-            num_pitches = len(pitches)
+            # Create a list to hold all pitches, before pitches, and after pitches
+            all_values = []
+
+            # Iterate over the filtered pitches and their corresponding before and after pitches
+            for pitch, before_pitch, after_pitch in zip(pitches, before_pitches, after_pitches):
+                # Add the pitch, before pitch, and after pitch to the all_values list
+                all_values.extend([pitch, before_pitch, after_pitch])
 
             # Create the plot
             fig_height = 6.0
-            fig_width = num_pitches * 0.6
+
+            # Adjust the figure width to make the plot more compact
+            fig_width = len(pitches) * 0.8  # Adjust the multiplier as needed
             plt.figure(figsize=(fig_width, fig_height), tight_layout=True)
 
-            # Plot the filtered pitches as blue dots
-            plt.scatter(range(len(pitches)), pitches, marker='o', color='blue')
+            # Plot the filtered pitches within range as blue dots and connect them with solid line
+            plt.plot(all_values[::3], marker='o', color='blue', linestyle='-', label='Match')
 
-            # Plot the line connecting the pitches as a solid blue line
-            for i in range(len(pitches) - 1):
-                plt.plot([i, i+1], [pitches[i], pitches[i+1]], color='blue')
+            # Plot the immediate pitch prior using a red dotted line
+            plt.plot(all_values[1::3], marker='o', color='red', linestyle='--', label='Before')
 
-            # Combine seasons_sessions and innings labels
-            x_labels = [f"{season}\n{inning}" for season, inning in zip(seasons_sessions, innings)]
+            # Plot the immediate pitch after using a black dotted line
+            plt.plot(all_values[2::3], marker='o', color='black', linestyle='--', label='After')
+
+            # Combine seasons_sessions, innings, before, match, and after labels
+            x_labels = []
+            for season, inning, before, match, after in zip(seasons_sessions, innings, before_pitches, pitches, after_pitches):
+                label = f"S{season}\n{inning}\nB: {before}\nM: {match}\nA: {after}"
+                x_labels.append(label)
+
+            # Set the x-axis labels and their positions
+            plt.xticks(range(len(x_labels)), x_labels)
 
             # Set the x-axis labels and their positions
             plt.xticks(range(len(x_labels)), x_labels)
@@ -224,7 +256,10 @@ class General(commands.Cog):
             plt.xlabel('Game')
             plt.ylabel('Pitch')
             plt.title(f'Pitches thrown by {player_name} in {league} (Range: {lower_range}-{high_range})')
-            plt.grid(True)
+            plt.grid(True, which='both', axis='y', color='gray', linestyle='--', linewidth=0.5, alpha=0.9)
+
+            # Add the legend (the key) to the bottom right of the plot
+            plt.legend(loc='lower right')
 
             # Save the plot
             filename = f'{self.image_folder}/plot_{self.image_counter}.png'
@@ -312,7 +347,6 @@ class General(commands.Cog):
         data = requests.get(f"{API_BASE_URL_B}/{league}/{player_id}").json()
         seasons_sessions = [f"{p['season']}.{p['session']}.{p['inning']}.{p['playNumber']}" for p in data]
         swings = [p['swing'] for p in data]
-  
         print(swings) 
     
         if swings:
